@@ -1,0 +1,401 @@
+"use client";
+
+import { useAppDispatch, useAppSelector } from "@/hooks/redux";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import AddModal from "../modals/AddModal";
+import ChangeModal from "../modals/ChangeModal";
+import ChangeCoverModal from "../modals/ChangeCoverModal";
+import {
+  asyncSetIsPostDelete,
+  asyncSetIsPostDeleteAll,
+  asyncSetPosts,
+  setIsPostDeleteActionCreator,
+  setIsPostDeleteAllActionCreator,
+} from "../states/action";
+import { formatDate, showConfirmDialog } from "../../../helpers/toolsHelper";
+import type { Post } from "@/types";
+import {
+  IconPlus,
+  IconArticle,
+  IconHeart,
+  IconMessageCircle,
+  IconEye,
+  IconPencil,
+  IconPhotoUp,
+  IconTrash,
+  IconFilter,
+  IconSearch,
+  IconLoader2,
+  IconTrashX,
+} from "@tabler/icons-react";
+
+function HomePage() {
+  const dispatch = useAppDispatch();
+  const router = useRouter();
+
+  const profile = useAppSelector((state) => state.profile);
+  const posts = useAppSelector((state) => state.posts);
+  const isPostDeleted = useAppSelector((state) => state.isPostDeleted);
+  const isPostDeletedAll = useAppSelector((state) => state.isPostDeletedAll);
+
+  const [loadingPosts, setLoadingPosts] = useState(false);
+  const [filter, setFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showChangeModal, setShowChangeModal] = useState(false);
+  const [showCoverModal, setShowCoverModal] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    setLoadingPosts(true);
+    Promise.resolve(dispatch(asyncSetPosts(filter))).finally(() => {
+      if (isMounted) setLoadingPosts(false);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [filter, dispatch]);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (isPostDeleted) {
+      dispatch(setIsPostDeleteActionCreator(false));
+      setLoadingPosts(true);
+      Promise.resolve(dispatch(asyncSetPosts(filter))).finally(() => {
+        if (isMounted) setLoadingPosts(false);
+      });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [isPostDeleted, filter, dispatch]);
+
+  useEffect(() => {
+    if (isPostDeletedAll) {
+      dispatch(setIsPostDeleteAllActionCreator(false));
+      setFilter("");
+    }
+  }, [isPostDeletedAll, dispatch]);
+
+  if (!profile) return null;
+
+  async function handleDeletePost(postId) {
+    const result = await showConfirmDialog(
+      "Apakah Anda yakin ingin menghapus postingan ini?"
+    );
+    if (result.isConfirmed) {
+      dispatch(asyncSetIsPostDelete(postId));
+    }
+  }
+
+  async function handleDeleteAllPosts() {
+    const result = await showConfirmDialog(
+      "Apakah Anda yakin ingin menghapus SEMUA postingan milik Anda?"
+    );
+    if (result.isConfirmed) {
+      dispatch(asyncSetIsPostDeleteAll());
+    }
+  }
+
+  const postList = posts;
+  const filteredPosts = postList.filter((post) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    const description = post.description ? post.description.toLowerCase() : "";
+    const author = post.author?.name ? post.author.name.toLowerCase() : "";
+    return description.includes(q) || author.includes(q);
+  });
+
+  const totalCount = postList.length;
+  const totalLikes = postList.reduce(
+    (acc, post) => acc + (post.likes ? post.likes.length : 0),
+    0
+  );
+  const totalComments = postList.reduce(
+    (acc, post) => acc + (post.comments ? post.comments.length : 0),
+    0
+  );
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-300">
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl sm:text-4xl font-semibold italic text-blush-700 tracking-tight">
+            Linimasa Postingan
+          </h1>
+          <p className="text-sm text-mauve-600 mt-1">
+            Bagikan cerita, pantau interaksi suka, dan kelola seluruh postinganmu.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {filter === "1" && (
+            <button
+              type="button"
+              data-testid="delete-all-posts-btn"
+              onClick={handleDeleteAllPosts}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-semibold text-sm text-red-700 bg-red-50 hover:bg-red-100 border border-red-200/70 transition-all"
+            >
+              <IconTrashX aria-hidden="true" size={18} stroke={2.5} />
+              <span>Hapus Semua</span>
+            </button>
+          )}
+          <button
+            type="button"
+            data-testid="add-post-btn"
+            onClick={() => setShowAddModal(true)}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-semibold text-sm text-white bg-gradient-to-r from-blush-500 to-lilac-400 hover:from-blush-600 hover:to-lilac-500 active:scale-[0.98] shadow-md shadow-blush-500/30 transition-all"
+          >
+            <IconPlus aria-hidden="true" size={18} stroke={2.5} />
+            <span>Tambah Postingan</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-3xl p-5 border border-blush-100 shadow-petal flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-mauve-600">
+              Total Postingan
+            </p>
+            <p className="text-3xl font-black text-mauve-800 mt-1">{totalCount}</p>
+          </div>
+          <div className="w-12 h-12 rounded-3xl bg-blush-50 text-blush-600 flex items-center justify-center">
+            <IconArticle aria-hidden="true" size={26} stroke={2} />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-3xl p-5 border border-blush-100 shadow-petal flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-mauve-600">
+              Total Suka
+            </p>
+            <p className="text-3xl font-black text-rose-700 mt-1">{totalLikes}</p>
+          </div>
+          <div className="w-12 h-12 rounded-3xl bg-rose-50 text-rose-600 flex items-center justify-center">
+            <IconHeart aria-hidden="true" size={26} stroke={2} />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-3xl p-5 border border-blush-100 shadow-petal flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-mauve-600">
+              Total Komentar
+            </p>
+            <p className="text-3xl font-black text-lilac-700 mt-1">{totalComments}</p>
+          </div>
+          <div className="w-12 h-12 rounded-3xl bg-lilac-50 text-lilac-600 flex items-center justify-center">
+            <IconMessageCircle aria-hidden="true" size={26} stroke={2} />
+          </div>
+        </div>
+      </div>
+
+      {/* Timeline & Controls Section */}
+      <div className="bg-white rounded-3xl border border-blush-100 shadow-petal overflow-hidden">
+        {/* Filter bar */}
+        <div className="p-4 sm:p-5 border-b border-blush-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="relative flex-1 max-w-md">
+            <IconSearch
+              aria-hidden="true"
+              size={18}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-mauve-400"
+            />
+            <input
+              type="text"
+              aria-label="Cari postingan"
+              data-testid="search-post-input"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cari deskripsi atau nama pembuat..."
+              className="w-full pl-10 pr-4 py-2 text-sm rounded-2xl border border-mauve-200 bg-white placeholder-mauve-500 focus:outline-none focus:ring-2 focus:ring-blush-500/20 focus:border-blush-600 transition-all"
+            />
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <span className="text-xs font-semibold text-mauve-600 uppercase tracking-wide flex items-center gap-1.5">
+              <IconFilter aria-hidden="true" size={16} /> Filter:
+            </span>
+            <div className="inline-flex rounded-2xl bg-mauve-100 p-1 text-xs font-semibold text-mauve-600">
+              <button
+                type="button"
+                data-testid="filter-all-btn"
+                onClick={() => setFilter("")}
+                className={`px-3 py-1.5 rounded-xl transition-all ${
+                  filter === ""
+                    ? "bg-white text-mauve-900 shadow-xs"
+                    : "hover:text-mauve-900"
+                }`}
+              >
+                Semua Postingan
+              </button>
+              <button
+                type="button"
+                data-testid="filter-mine-btn"
+                onClick={() => setFilter("1")}
+                className={`px-3 py-1.5 rounded-xl transition-all ${
+                  filter === "1"
+                    ? "bg-white text-blush-700 shadow-xs"
+                    : "hover:text-mauve-900"
+                }`}
+              >
+                Postingan Saya
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Post list */}
+        {loadingPosts && filteredPosts.length === 0 ? (
+          <div className="px-6 py-16 text-center text-mauve-600">
+            <IconLoader2
+              aria-hidden="true"
+              size={36}
+              className="mx-auto text-blush-600 animate-spin mb-2"
+            />
+            <p className="font-medium text-mauve-600">Memuat daftar postingan...</p>
+          </div>
+        ) : filteredPosts.length === 0 ? (
+          <div className="px-6 py-16 text-center text-mauve-600">
+            <IconArticle aria-hidden="true" size={40} className="mx-auto text-mauve-300 mb-2" />
+            <p className="font-medium">Belum ada postingan yang cocok.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-blush-100">
+            {filteredPosts.map((post) => (
+              <article
+                key={`post-${post.id}`}
+                data-testid={`post-card-${post.id}`}
+                className="p-4 sm:p-6 hover:bg-mauve-50/70 transition-colors flex flex-col sm:flex-row gap-5"
+              >
+                {post.cover && (
+                  <img
+                    src={post.cover}
+                    alt={post.description || "cover"}
+                    width={176}
+                    height={128}
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full sm:w-44 h-32 rounded-2xl object-cover border border-mauve-200 shrink-0"
+                  />
+                )}
+
+                <div className="flex-1 min-w-0 space-y-2.5">
+                  <div className="flex items-center gap-3">
+                    {post.author?.photo ? (
+                      <img
+                        src={post.author.photo}
+                        alt={post.author?.name || "author"}
+                        width={36}
+                        height={36}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-9 h-9 rounded-full object-cover border border-mauve-200"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blush-500 to-lilac-600 text-white flex items-center justify-center font-bold text-xs">
+                        {post.author?.name?.charAt(0)?.toUpperCase() || "U"}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm font-semibold text-mauve-800 leading-tight">
+                        {post.author?.name || "Tanpa Nama"}
+                      </p>
+                      <p className="text-xs text-mauve-600 leading-tight">
+                        {formatDate(post.created_at)}
+                      </p>
+                    </div>
+                    <span className="ml-auto font-mono text-xs font-bold text-mauve-500">
+                      #{post.id}
+                    </span>
+                  </div>
+
+                  <p className="text-sm text-mauve-600 whitespace-pre-wrap leading-relaxed">
+                    {post.description || "Tidak ada deskripsi."}
+                  </p>
+
+                  <div className="flex items-center gap-4 text-xs font-semibold text-mauve-600">
+                    <span className="inline-flex items-center gap-1.5">
+                      <IconHeart aria-hidden="true" size={15} className="text-rose-500" />
+                      {post.likes ? post.likes.length : 0} suka
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <IconMessageCircle aria-hidden="true" size={15} className="text-lilac-500" />
+                      {post.comments ? post.comments.length : 0} komentar
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex sm:flex-col items-center gap-1.5 self-start">
+                  <button
+                    type="button"
+                    data-testid={`view-post-${post.id}`}
+                    onClick={() => router.push(`/posts/${post.id}`)}
+                    className="p-1.5 text-mauve-600 hover:text-blush-600 hover:bg-blush-50 rounded-xl transition-colors"
+                    title="Lihat Detail"
+                    aria-label="Lihat detail postingan"
+                  >
+                    <IconEye aria-hidden="true" size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    data-testid={`edit-post-${post.id}`}
+                    onClick={() => {
+                      setSelectedPost(post);
+                      setShowChangeModal(true);
+                    }}
+                    className="p-1.5 text-mauve-600 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-colors"
+                    title="Ubah Postingan"
+                    aria-label="Ubah postingan"
+                  >
+                    <IconPencil aria-hidden="true" size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    data-testid={`cover-post-${post.id}`}
+                    onClick={() => {
+                      setSelectedPost(post);
+                      setShowCoverModal(true);
+                    }}
+                    className="p-1.5 text-mauve-600 hover:text-lilac-600 hover:bg-lilac-50 rounded-xl transition-colors"
+                    title="Ubah Cover"
+                    aria-label="Ubah cover postingan"
+                  >
+                    <IconPhotoUp aria-hidden="true" size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    data-testid={`delete-post-${post.id}`}
+                    onClick={() => handleDeletePost(post.id)}
+                    className="p-1.5 text-mauve-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                    title="Hapus Postingan"
+                    aria-label="Hapus postingan"
+                  >
+                    <IconTrash aria-hidden="true" size={18} />
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Modals */}
+      <AddModal show={showAddModal} onClose={() => setShowAddModal(false)} />
+      <ChangeModal
+        show={showChangeModal}
+        onClose={() => setShowChangeModal(false)}
+        postId={selectedPost?.id}
+      />
+      <ChangeCoverModal
+        show={showCoverModal}
+        onClose={() => setShowCoverModal(false)}
+        post={selectedPost}
+      />
+    </div>
+  );
+}
+
+export default HomePage;
